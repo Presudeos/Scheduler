@@ -1,0 +1,14 @@
+setConsoleColor(14);
+        printf("\n\t\t\t\t-----What do you want to do today?-----");
+        setConsoleColor(15);
+        setConsoleColor(14);
+        printf("\n1. See your schedule and calendar");
+        setConsoleColor(15);
+        setConsoleColor(14);
+        printf("\n2. Add your task and notes");
+        setConsoleColor(15);
+        setConsoleColor(14);
+        printf("\n3. Log out");
+        setConsoleColor(15);
+        setConsoleColor(14);
+        printf("\nEnter your choice: ");

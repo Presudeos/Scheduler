@@ -1,0 +1,870 @@
+#include <stdio.h>
+#include <windows.h>
+#include <string.h>
+#include <time.h>
+#include <ctype.h>
+#include <conio.h>
+
+#define ENTER 13
+#define BCKSPC 8
+#define MAX_TASKS 100
+
+#define CREATE_ACCOUNT 2
+#define SIGN_IN 1
+#define CHANGE_PASSWORD 3
+#define EXIT 4
+
+struct user {
+    char username[100];
+    char password[100];
+};
+
+struct task {
+    char name[100];
+    char notes[100];
+    int day;
+    int month;
+    int year;
+};
+
+void displayTasks(struct task tasks[MAX_TASKS], int numTasks, int selectedDate, int selectedMonth, int selectedYear);
+void editTask(struct task *task, struct task tasks[MAX_TASKS], int *numTasks);
+void deleteTask(struct task tasks[MAX_TASKS], int *numTasks, int selectedDate, int selectedMonth, int selectedYear);
+void saveTasks(struct task tasks[MAX_TASKS], int numTasks);
+void signIn(struct task tasks[MAX_TASKS], int *numTasks);
+void loadTasks(struct task tasks[MAX_TASKS], int *numTasks);
+void setConsoleColor(int color);
+void clearConsoleScreen();
+void clearInputBuffer();
+void takeInput(char ch[100]);
+int getch();
+void takePassword(char *str);
+void displayMenu();
+int getMenuChoice();
+int passwordStrength(const char *password);
+const char *getMonthName(int month);
+void displayCalendar(int month, int year, struct task tasks[MAX_TASKS], int numTasks, int selectedDay, int selectedMonth, int selectedYear);
+void createAccount();
+void changePassword();
+
+
+void setConsoleColor(int color) {
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color);
+}
+
+void clearConsoleScreen() {
+    COORD coord = {0, 0};
+    DWORD written;
+    FillConsoleOutputCharacter(GetStdHandle(STD_OUTPUT_HANDLE), ' ', 100 * 100, coord, &written);
+    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+}
+
+void clearInputBuffer() {
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF){
+
+    }
+}
+
+void takeInput(char ch[100]) {
+    fgets(ch, 100, stdin);
+    size_t len = strlen(ch);
+    
+    if (len > 0 && ch[len - 1] == '\n') {
+        ch[len - 1] = '\0';
+    } else {
+        int c;
+        while ((c = getchar()) != '\n' && c != EOF);
+    }
+}
+
+int getch() {
+    int ch = _getch();
+    if (ch == 0 || ch == 0xE0) {
+        _getch(); 
+    }
+    return ch;
+}
+
+void takePassword(char *str) {
+    int i = 0;
+    str[0] = '\0';
+    do {
+        int ch = getch();
+        if (ch == ENTER) {
+            str[i] = '\0';
+            break;
+        } else if (ch == BCKSPC) {
+            if (i > 0) {
+                i--;
+                printf("\b \b");
+            }
+        } else if (ch == 0 || ch == 0xE0) {
+            getch();
+        } else {
+            str[i] = (char)ch;
+            printf("*");
+            i++;
+        }
+    } while (1);
+
+    fflush(stdin);
+}
+
+void displayMenu() {
+    setConsoleColor(14);
+    printf("\n\t\t\t\t------Hello, Welcome to your personalized Schedule App!------\n");
+    setConsoleColor(15);
+
+    setConsoleColor(14);
+    printf("Input 1 to Sign In\n");
+    setConsoleColor(15);
+
+    setConsoleColor(14);
+    printf("Input 2 to Create Account\n");
+    setConsoleColor(15);
+
+    setConsoleColor(14);
+    printf("Input 3 to Change Password\n");
+    setConsoleColor(15);
+
+    setConsoleColor(14);
+    printf("Input 4 to Exit\n");
+    setConsoleColor(15);
+}
+
+int getMenuChoice() {
+    int choice;
+
+    while (1) {
+        setConsoleColor(14);
+        printf("Enter your choice (1-4): ");
+        setConsoleColor(15);
+
+        if (scanf("%d", &choice) == 1 && choice >= 1 && choice <= 4) {
+            clearInputBuffer();
+            return choice;
+        } else {
+            clearInputBuffer();
+            setConsoleColor(14);
+            printf("Invalid choice. Please enter a number between 1 and 4.\n");
+            setConsoleColor(15);
+        }
+    }
+}
+
+int passwordStrength(const char *password);
+
+void createAccount() {
+    struct user user = {0};
+    setConsoleColor(14);
+    printf("Enter your username: ");
+    setConsoleColor(15);
+    takeInput(user.username);
+    
+    do {
+        setConsoleColor(14);
+        printf("Enter your password: ");
+        setConsoleColor(15);
+        takePassword(user.password);
+
+        setConsoleColor(14);
+        printf("\nConfirm your password: ");
+        setConsoleColor(15);
+        char confirmPassword[100];
+        takePassword(confirmPassword);
+
+        if (strcmp(user.password, confirmPassword) != 0) {
+            setConsoleColor(14);
+            printf("\nPasswords do not match. Please try again.\n");
+            setConsoleColor(15);
+        }else if (!passwordStrength(user.password)){
+            setConsoleColor(14);
+            printf("\nPassword is too weak. Choose a stronger password\n");
+             setConsoleColor(15);
+        }else{
+            break;
+        }
+    }while (1);
+
+    FILE *fp = fopen("Users.dat", "ab+");
+    if (fp == NULL){
+        perror("Error in opening file");
+        return;
+    }
+
+    fseek(fp, 0, SEEK_END);
+
+    int writeResult = fwrite(&user, sizeof(struct user), 1, fp);
+    fclose(fp);
+
+    if (writeResult != 0){
+        setConsoleColor(14);
+        printf("\nRegistration successful, Your username is %s\n", user.username);
+        setConsoleColor(15);
+    }else{
+        setConsoleColor(14);
+        printf("\nSomething went wrong");
+        setConsoleColor(15);
+    }
+    setConsoleColor(14);
+    printf("\nPress Enter to continue...");
+    setConsoleColor(15);
+    while (getchar() != '\n');
+    system("cls"); 
+}
+
+int passwordStrength(const char *password){
+    int length = strlen(password);
+    int hasLetter = 0;
+    int hasDigit = 0;
+
+    for (int i=0;i < length; i++){
+        if(isalpha(password[i])){
+            hasLetter = 1;
+        } else if (isdigit(password[i])){
+            hasDigit = 1;
+        }
+    }
+
+    if (length >= 6  && (hasLetter || hasDigit )){
+        return 1;
+    } else {
+        return 0;
+    }
+}
+const char *getMonthName(int month) {
+    setConsoleColor(14);
+    static const char *monthNames[] = {"", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+    setConsoleColor(15);
+    return monthNames[month];
+}
+void displayCalendar(int month, int year, struct task tasks[MAX_TASKS], int numTasks, int selectedDay, int selectedMonth, int selectedYear) {
+    system("cls");
+    setConsoleColor(14);
+    printf("\n\n\t\t\t\t\t  \x1b[33m%s %d\x1b[0m\n", getMonthName(month), year);
+    setConsoleColor(15);
+
+    setConsoleColor(14);
+    printf(" +-------------------------------+\n");
+    setConsoleColor(15);
+
+    setConsoleColor(14);
+    printf(" Sun  Mon  Tue  Wed  Thu  Fri  Sat\n");
+    setConsoleColor(15);
+
+    setConsoleColor(14);
+    printf(" +-------------------------------+\n");
+    setConsoleColor(15);
+
+    struct tm firstDay = {0};
+    firstDay.tm_year = year - 1900;
+    firstDay.tm_mon = month - 1;
+    firstDay.tm_mday = 1;
+    mktime(&firstDay);
+
+    int dayOfWeek = firstDay.tm_wday;
+
+    int daysInMonth;
+    if (month == 2) {
+        if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0))
+            daysInMonth = 29;
+        else
+            daysInMonth = 28;
+    } else if (month == 4 || month == 6 || month == 9 || month == 11) {
+        daysInMonth = 30;
+    } else {
+        daysInMonth = 31;
+    }
+
+    int day = 1;
+    for (int i = 0; i < 6; i++) {
+        for (int j = 0; j < 7; j++) {
+            if (i == 0 && j < dayOfWeek) {
+                printf("     ");
+            } else if (day <= daysInMonth) {
+                int taskFound = 0;
+                for (int k = 0; k < numTasks; k++) {
+                    if (tasks[k].day == day && tasks[k].month == month) {
+                        taskFound = 1;
+                        break;
+                    }
+                }
+                int isSelected = (selectedDay == day && selectedMonth == month && selectedYear == year);
+
+                if (isSelected) {
+                    printf("\x1b[32m");  
+                } else if (taskFound) {
+                    printf("\x1b[31m");  
+                }
+
+                printf(" %3d ", day);
+
+                if (isSelected || taskFound) {
+                    printf("\x1b[0m"); 
+                }
+
+                day++;
+            }
+
+        }
+        printf("\n");
+    }
+    setConsoleColor(14);
+    printf(" +-------------------------------+\n");
+    setConsoleColor(15);
+
+    setConsoleColor(14);
+    printf("\nSelect the date to see your tasks (enter 0 to go back): ");
+    setConsoleColor(15);
+
+    int selectedDate;
+    scanf("%d", &selectedDate);
+
+    if (selectedDate == 0) {
+        return;
+    } else {
+        system("cls");
+        displayTasks(tasks, numTasks, selectedDate, month, year);
+        return;
+    }
+}
+
+void displayTasks(struct task tasks[MAX_TASKS], int numTasks, int selectedDate, int selectedMonth, int selectedYear) {
+    int goBack = 0;  
+
+    do {
+        system("cls");
+        setConsoleColor(14);
+        printf("\n\t\t\t\t------Your Tasks and Notes------\n");
+        setConsoleColor(15);
+
+        if (selectedDate != 0 || selectedMonth != 0) {
+            printf("\x1b[33m");
+            printf("Date: %d %s %d\n", selectedDate, getMonthName(selectedMonth), selectedYear); 
+            printf("\x1b[0m");
+        }
+
+        int tasksFound = 0;
+        for (int i = 0; i < numTasks; i++) {
+            if (tasks[i].day == selectedDate && tasks[i].month == selectedMonth && tasks[i].year == selectedYear) {
+                tasksFound = 1;
+
+                setConsoleColor(14);
+                printf("----------------------------------\n");
+                setConsoleColor(15);
+
+                setConsoleColor(14);
+                printf("Task: %s\n", tasks[i].name);
+                setConsoleColor(15);
+
+                setConsoleColor(14);
+                printf("Notes: %s\n", tasks[i].notes);
+                setConsoleColor(15);
+
+                setConsoleColor(14);
+                printf("----------------------------------\n");
+                setConsoleColor(15);
+
+                setConsoleColor(14);
+                printf("Options:\n");
+                printf("1. Edit Task\n");
+                printf("2. Delete Task\n");
+                printf("3. Go back\n");
+                setConsoleColor(15);
+
+                int option;
+                setConsoleColor(14);
+                printf("Enter your choice: ");
+                setConsoleColor(15);
+                scanf("%d", &option);
+                while (getchar() != '\n');
+
+                switch (option) {
+                    case 1:
+                        editTask(&tasks[i], tasks, &numTasks);
+                        break;
+                    case 2:
+                        deleteTask(tasks, &numTasks, tasks[i].day, tasks[i].month, tasks[i].year);
+                        break;
+                    case 3:
+                        goBack = 1;
+                        break;
+                    default:
+                        setConsoleColor(14);
+                        printf("Invalid option. Press Enter to continue..\n");
+                        setConsoleColor(15);
+                        getch();
+                }
+                if (goBack){
+                    break;
+                }
+            }
+        }
+
+        if (!tasksFound) {
+            setConsoleColor(14);
+            printf("\x1b[31mNo tasks found for %d %s %d\x1b[0m \n", selectedDate, getMonthName(selectedMonth), selectedYear);
+            setConsoleColor(15);
+            setConsoleColor(14);
+            printf("\nPress Enter to continue...");
+            setConsoleColor(15);
+            int enterKey;
+            while ((enterKey = getchar()) != '\n' && enterKey != EOF);
+            goBack = 1;
+        } else {
+            setConsoleColor(14);
+            printf("\nPress Enter to go back...");
+            setConsoleColor(15);
+            int enterKey;
+            while ((enterKey = getchar()) != '\n' && enterKey != EOF);
+        }
+    }while (goBack == 0);
+}
+
+void editTask(struct task *task, struct task tasks[MAX_TASKS], int *numTasks){
+    if (*numTasks == 0) {
+        setConsoleColor(14);
+        printf("\nNo tasks available to edit.");
+        setConsoleColor(15);
+        return;
+    }
+
+    int taskIndex = -1;
+    setConsoleColor(14);
+    printf("\nEnter the index of the task to edit (1-%d): ", numTasks);
+    setConsoleColor(15);
+    scanf("%d", &taskIndex);
+
+    if (taskIndex < 1 || taskIndex > *numTasks) {
+        setConsoleColor(14);
+        printf("\nInvalid index. Press Enter to go back...");
+        setConsoleColor(15);
+        while (getchar() != '\n');
+        return;
+    }
+
+    taskIndex--;
+
+    setConsoleColor(14);
+    printf("\nEditing Task:\n");
+    setConsoleColor(15);
+    printf("Task Name: %s\n", tasks[taskIndex].name);
+    printf("Notes: %s\n", tasks[taskIndex].notes);
+    printf("Date: %d %s %d\n", tasks[taskIndex].day, getMonthName(tasks[taskIndex].month), tasks[taskIndex].year);
+    
+    setConsoleColor(14);
+    printf("\nDo you want to edit this task? (1: Yes, 0: No): ");
+    setConsoleColor(15);
+    int confirmation;
+    scanf("%d", &confirmation);
+
+    if (confirmation) {
+        setConsoleColor(14);
+        printf("\nEnter new task: ");
+        setConsoleColor(15);
+        takeInput(tasks[taskIndex].name);
+
+        while (getchar() != '\n');
+
+        setConsoleColor(14);
+        printf("Enter new notes: ");
+        setConsoleColor(15);
+       takeInput(tasks[taskIndex].notes);
+
+        setConsoleColor(14);
+        printf("Enter new day (1-31): ");
+        setConsoleColor(15);
+        scanf("%d", &tasks[taskIndex].day);
+         while(tasks[taskIndex].day < 1 || tasks[taskIndex].day > 31) {
+            printf("Invalid day. Please enter a day between 1 and 31: ");
+            scanf("%d", &tasks[taskIndex].day);
+        }
+
+        setConsoleColor(14);
+        printf("Enter new month (1-12): ");
+        setConsoleColor(15);
+        scanf("%d", &tasks[taskIndex].month);
+         while(tasks[taskIndex].month < 1 || tasks[taskIndex].month > 12) {
+            printf("Invalid month. Please enter a month between 1 and 12: ");
+            scanf("%d", &tasks[taskIndex].month);
+        }
+
+        setConsoleColor(14);
+        printf("Enter new year: ");
+        setConsoleColor(15);
+        scanf("%d", &tasks[taskIndex].year);
+         while(tasks[taskIndex].year < 0) {
+            printf("Invalid year. Please enter a positive year: ");
+            scanf("%d", &tasks[taskIndex].year);
+        }
+
+        setConsoleColor(14);
+        printf("\nTask edited successfully!");
+        setConsoleColor(15);
+    } else {
+        setConsoleColor(14);
+        printf("\nEdit cancelled.");
+        setConsoleColor(15);
+    }
+    while (getchar() != '\n');
+}
+
+void deleteTask(struct task tasks[MAX_TASKS], int *numTasks, int selectedDate, int selectedMonth, int selectedYear) {
+    if (*numTasks == 0) {
+        printf("\nNo tasks to delete.\n");
+    } else {
+        int taskIndex = -1;
+
+        for (int i = 0; i < *numTasks; i++) {
+            if (tasks[i].day == selectedDate && tasks[i].month == selectedMonth && tasks[i].year == selectedYear) {
+                taskIndex = i;
+                break;
+            }   
+        }
+
+        if (taskIndex != -1) {
+            for (int i = taskIndex; i < *numTasks - 1; i++) {
+                tasks[i] = tasks[i + 1];
+            }
+
+            (*numTasks)--;
+
+            printf("\nTask deleted successfully!\n");
+        } else {
+            printf("\nNo task found on the selected date.\n");
+        }
+    }
+
+    saveTasks(tasks, *numTasks);
+    printf("Press Enter to go back...");
+
+    while (getchar() != '\n');
+}
+
+void changePassword() {
+    struct user user;
+    int userFound = 0;
+    char username[100], pword[100];
+
+    setConsoleColor(14);
+    printf("Enter your username: ");
+    setConsoleColor(15);
+    takeInput(username);
+    setConsoleColor(14);
+    printf("Enter your current password: ");
+    setConsoleColor(15);
+    takePassword(pword);
+
+    FILE *fp = fopen("Users.dat", "r+b");
+    if (fp == NULL) {
+        perror("Error opening file");
+        return;
+    }
+
+    while (fread(&user, sizeof(struct user), 1, fp) == 1){
+        if (strcmp(user.username, username) == 0 && strcmp(user.password, pword) == 0) {
+            userFound = 1;
+            break;
+        }
+    }
+
+    if (!userFound) {
+        setConsoleColor(14);
+        printf("\n\nUser is not registered or incorrect password!");
+        setConsoleColor(15);
+
+        setConsoleColor(14);
+        printf("\nPress Enter to continue...");
+        setConsoleColor(15);
+        while (getchar() != '\n');
+    } else {
+        setConsoleColor(14);
+        printf("\nEnter your new password: ");
+        setConsoleColor(15);
+        takePassword(user.password);
+
+        size_t len = strlen(user.password);
+        if (len > 0 && user.password[len - 1] == '\n') {
+            user.password[len - 1] = '\0';
+        }
+
+        fseek(fp, -sizeof(struct user), SEEK_CUR);
+        fwrite(&user, sizeof(struct user), 1, fp);
+
+        setConsoleColor(14);
+        printf("\nPassword changed successfully!");
+        setConsoleColor(15);
+
+        setConsoleColor(14);
+        printf("\nPress Enter to continue...");
+        setConsoleColor(15);
+        while (getchar() != '\n');
+        
+    }
+    fclose(fp);
+    system("cls"); 
+}
+
+void saveTasks(struct task tasks[MAX_TASKS], int numTasks) {
+    FILE *file = fopen("tasks.dat", "wb");
+    if (file == NULL) {
+        perror("Error opening file!");
+        return;
+    }
+    fwrite(tasks, sizeof(struct task), numTasks, file);
+    fclose(file);
+}
+void signIn(struct task tasks[MAX_TASKS], int *numTasks) {
+    struct user user = {0};
+    int userFound = 0;
+    char username[100], pword[100];
+    int taskIndex = 0;
+
+    setConsoleColor(14);
+    printf("Enter your username : ");
+    setConsoleColor(15);
+    takeInput(username);
+
+    setConsoleColor(14);
+    printf("Enter your password : ");
+    setConsoleColor(15);
+    takePassword(pword);
+
+    FILE *fp = fopen("Users.dat", "rb");
+    if (fp == NULL) {
+        perror("Error opening Users.dat");
+        return;
+    }
+
+    while (fread(&user, sizeof(struct user), 1, fp) == 1) {
+        if (strcmp(user.username, username) == 0 && strcmp(user.password, pword) == 0) {
+            userFound = 1;
+            break;
+        }
+    }
+
+    fclose(fp);
+
+    if (!userFound) {
+        setConsoleColor(14);
+        printf("\n\nUser is not registered or incorrect password!");
+        setConsoleColor(15);
+
+        setConsoleColor(14);
+        printf("\nPress Enter to continue...");
+        setConsoleColor(15);
+        while (getchar() != '\n');
+        system("cls");
+        return;
+    }
+
+    int menuChoice;
+
+    do {
+        clearConsoleScreen();
+
+        setConsoleColor(14);
+        printf("\n\t\t\t\t-----What do you want to do today?-----");
+        setConsoleColor(15);
+        setConsoleColor(14);
+        printf("\n1. See your schedule and calendar");
+        setConsoleColor(15);
+        setConsoleColor(14);
+        printf("\n2. Add your task and notes");
+        setConsoleColor(15);
+        setConsoleColor(14);
+        printf("\n3. Log out");
+        setConsoleColor(15);
+        setConsoleColor(14);
+        printf("\nEnter your choice: ");
+        setConsoleColor(15);
+        scanf("%d", &menuChoice);
+        while (getchar() != '\n');
+
+        switch (menuChoice) {
+            case 1:{
+                int targetMonth, targetYear;
+                do{
+                    setConsoleColor(14);
+                    printf("Enter the month (1-12): ");
+                    setConsoleColor(15);
+                    if (scanf("%d", &targetMonth) != 1 || targetMonth < 1 || targetMonth > 12) {
+                        setConsoleColor(14);
+                        printf("Invalid month. Press Enter to go back.\n");
+                        setConsoleColor(15);
+                        while (getchar() != '\n');
+                        getchar();
+                    }
+                }while (targetMonth < 1 || targetMonth > 12);
+
+                do {
+                    setConsoleColor(14);
+                    printf("Enter the year (2023-2033): ");
+                    setConsoleColor(15);
+                    if (scanf("%d", &targetYear) != 1 || targetYear < 2023 || targetYear > 2033) {
+                        setConsoleColor(14);
+                        printf("Invalid year. Press Enter to go back...\n");
+                        setConsoleColor(15);
+                        while (getchar() != '\n');
+                        getchar();
+                    }
+                }while (targetYear < 2023 || targetYear > 2033);
+
+                while(getchar() != '\n');
+
+                displayCalendar(targetMonth, targetYear, tasks, *numTasks, 0, 0, 0);
+                displayTasks(tasks, *numTasks, tasks[taskIndex].day, tasks[taskIndex].month, tasks[taskIndex].year);
+                break;
+            }
+            case 2:{
+                setConsoleColor(14);
+                printf("\nEnter task name: ");
+                setConsoleColor(15);
+                takeInput(tasks[*numTasks].name);
+                setConsoleColor(14);
+                printf("Enter the notes: ");
+                setConsoleColor(15);
+                takeInput(tasks[*numTasks].notes);
+                setConsoleColor(14);
+                printf("Enter the day (1-31): ");
+                setConsoleColor(15);
+                scanf("%d", &tasks[*numTasks].day);
+                if (tasks[*numTasks].day < 1 || tasks[*numTasks].day > 31) {
+                    setConsoleColor(14);
+                    printf("Invalid day\n");
+                    setConsoleColor(15);
+                    break;
+                }
+                setConsoleColor(14);
+                printf("Enter month (1-12): ");
+                setConsoleColor(15);
+                scanf("%d", &tasks[*numTasks].month);
+                if (tasks[*numTasks].month < 1 || tasks[*numTasks].month > 12) {
+                    setConsoleColor(14);
+                    printf("Invalid month\n");
+                    setConsoleColor(15);
+                    break;
+                }
+                setConsoleColor(14);
+                printf("Enter the year (2023-2033): ");
+                setConsoleColor(15);
+                scanf("%d", &tasks[*numTasks].year);
+                if (tasks[*numTasks].year < 2023 || tasks[*numTasks].year > 2033){
+                    setConsoleColor(14);
+                    printf("Invalid year\n");
+                    setConsoleColor(15);
+                    break;
+                }
+
+                (*numTasks)++;
+                saveTasks(tasks, *numTasks);
+
+                setConsoleColor(14);
+                printf("\nTask added successfully!");
+                setConsoleColor(15);
+
+                setConsoleColor(14);
+                printf("\nPress Enter to continue...");
+                setConsoleColor(15);
+                getch();
+                break;
+            }
+            case 3:
+                setConsoleColor(14);
+                printf("\nLogging out...");
+                setConsoleColor(15);
+                setConsoleColor(14);
+                printf("\nPress Enter to continue..");
+                setConsoleColor(15);
+                while (getchar() != '\n');
+                clearConsoleScreen();
+                break;
+            default:
+                setConsoleColor(14);
+                printf("\nInvalid choice.");
+                setConsoleColor(15);
+                setConsoleColor(14);
+                printf("\nPress Enter to go back...");
+                setConsoleColor(15);
+                while (getchar() != '\n');
+        }
+    } while (menuChoice != 3);
+}
+
+void loadTasks(struct task tasks[MAX_TASKS], int *numTasks) {
+    FILE *file = fopen("tasks.dat", "rb");
+    if (file == NULL) {
+        *numTasks = 0;
+        return;
+    }
+    *numTasks = fread(tasks, sizeof(struct task), MAX_TASKS, file);
+    fclose(file);
+}
+int main() {
+    FILE *fp;
+    int choice;
+    struct task tasks[MAX_TASKS];
+    int numTasks = 0;
+    int targetDay, targetMonth, targetYear;
+    loadTasks(tasks, &numTasks);
+
+     do {
+            displayMenu();
+            choice = getMenuChoice();
+
+            switch (choice) {
+                case 1:
+                signIn(tasks, &numTasks);
+                break;
+                case 2:
+                createAccount();
+                break;
+                case 3:
+                changePassword();
+                break;
+                case 4:
+                setConsoleColor(14);
+                printf("Exiting the application. Goodbye!\n");
+                setConsoleColor(15);
+                break;
+                default:
+                setConsoleColor(14);
+                printf("Invalid choice. Please enter a number between 1 and 4.\n");
+                setConsoleColor(15);
+                clearInputBuffer();
+                setConsoleColor(14);
+                printf("Press Enter to go back...");
+                setConsoleColor(15);
+                while (getchar() != '\n');
+                break;
+            }
+        }
+
+     while (choice != 4);
+
+    if (choice == 1) {
+        setConsoleColor(14);
+        printf("\nEnter the day of the month: ");
+        setConsoleColor(15);
+        while(1){
+            if( scanf("%d", &targetDay) == 1){
+                break;
+            }else{
+                setConsoleColor(14);
+                printf("\nPlease enter a valid number for the day: ");
+                setConsoleColor(15);
+                while (getchar() != '\n'); 
+            }
+        }
+        targetMonth = 1;  
+        targetYear = 2023;  
+        displayCalendar(targetMonth, targetYear, tasks, numTasks, 0, 0, 0);
+        displayTasks(tasks, numTasks, targetDay, targetMonth, targetYear);
+    }
+
+    COORD coord = {0, 0};
+    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+
+    return 0;
+}
